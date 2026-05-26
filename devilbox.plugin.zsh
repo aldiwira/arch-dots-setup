@@ -2,111 +2,117 @@
 # DEVILBOX CONFIGURATION WITH REUSABLE PATH VARIABLE
 # =============================================================================
 
-set -g DEVILBOX_PATH ~/Work/devilbox-ce
+export DEVILBOX_PATH="${DEVILBOX_PATH:-$HOME/Work/devilbox-ce}"
 
 
 # 1. Navigasi & Shell
-function devilbox-dir --description "Go to Devilbox directory"
-    cd $DEVILBOX_PATH
-end
+devilbox-dir() {
+    cd "$DEVILBOX_PATH"
+}
 
-function devilbox-root --description "Go to Devilbox www root directory"
-    cd $DEVILBOX_PATH/data/www
-end
+devilbox-root() {
+    cd "$DEVILBOX_PATH/data/www"
+}
 
-function devilbox-remote --description "Enter Devilbox shell"
-    set -l current_dir (pwd)
-    cd $DEVILBOX_PATH; and sh ./shell.sh
-    cd $current_dir
-end
+devilbox-remote() {
+    local current_dir=$(pwd)
+    cd "$DEVILBOX_PATH" && sh ./shell.sh
+    cd "$current_dir"
+}
 
-function devilbox-config --description "Edit Devilbox .env config"
-    set -l current_dir (pwd)
-    cd $DEVILBOX_PATH; and vim .env
-    cd $current_dir
-end
+devilbox-config() {
+    local current_dir=$(pwd)
+    cd "$DEVILBOX_PATH" && vim .env
+    cd "$current_dir"
+}
 
 
 # 2. Manajemen Container
-function devilbox-stop --description "Stop Devilbox containers"
-    set -l current_dir (pwd)
-    cd $DEVILBOX_PATH; and docker compose stop
-    cd $current_dir
-end
+devilbox-stop() {
+    local current_dir=$(pwd)
+    cd "$DEVILBOX_PATH" && docker compose stop
+    cd "$current_dir"
+}
 
-function devilbox-kill --description "Down Devilbox containers and networks"
-    set -l current_dir (pwd)
-    cd $DEVILBOX_PATH; and docker compose down
-    cd $current_dir
-end
+devilbox-kill() {
+    local current_dir=$(pwd)
+    cd "$DEVILBOX_PATH" && docker compose down
+    cd "$current_dir"
+}
 
 
 # 3. Fungsi Utama (Run & Reboot)
-function devilbox-reboot --description "Stop and remove Devilbox container configs"
+devilbox-reboot() {
     echo "================================"
     echo "Reboot Devilbox Config"
     echo "================================"
     echo "Stopping the process..."
 
-    set -l current_dir (pwd)
-    cd $DEVILBOX_PATH; or return 1
+    local current_dir=$(pwd)
+    cd "$DEVILBOX_PATH" || return 1
     docker compose stop
 
     echo "================================"
     echo "Removing config data..."
     docker compose rm -f
 
-    cd $current_dir
+    cd "$current_dir"
     echo "================================"
     echo "Please start again devilbox"
-end
+}
 
-function devilbox-run --description "Run Devilbox containers with optional arguments"
-    set -l current_dir (pwd)
+devilbox-run() {
+    local current_dir=$(pwd)
 
-    if test -d "$DEVILBOX_PATH"
-        echo 'Directory Found'
-    else
+    if [[ ! -d "$DEVILBOX_PATH" ]]; then
         echo "Directory $DEVILBOX_PATH does not exist"
         return 1
-    end
+    fi
 
-    cd $DEVILBOX_PATH
+    cd "$DEVILBOX_PATH"
 
-    if test (count $argv) -eq 0
+    if (( $# == 0 )); then
         docker compose up -d portainer php httpd mysql
     else
-        docker compose up -d portainer $argv
-    end
+        docker compose up -d portainer "$@"
+    fi
 
-    cd $current_dir
-end
+    cd "$current_dir"
+}
 
 
 # 4. Dispatcher
-function devilbox --description "Devilbox CLI manager"
-    set -l cmd $argv[1]
-    set -l rest $argv[2..]
+devilbox() {
+    local cmd="${1:-}"
+    shift 2>/dev/null || true
 
-    switch $cmd
-        case dir
+    case "$cmd" in
+        dir)
             devilbox-dir
-        case root
+            ;;
+        root)
             devilbox-root
-        case shell remote
+            ;;
+        shell|remote)
             devilbox-remote
-        case config
+            ;;
+        config)
             devilbox-config
-        case stop
+            ;;
+        stop)
             devilbox-stop
-        case kill down
+            ;;
+        kill|down)
             devilbox-kill
-        case reboot
+            ;;
+        reboot)
             devilbox-reboot
-        case run start
-            devilbox-run $rest
-        case status
-            docker compose -f $DEVILBOX_PATH/docker-compose.yml ps --format '{{.Name}}\t{{.Ports}}\t{{.Status}}' | \
+            ;;
+        run|start)
+            devilbox-run "$@"
+            ;;
+        status)
+            docker compose -f "$DEVILBOX_PATH/docker-compose.yml" ps --format '{{.Name}}\t{{.Ports}}\t{{.Status}}' | \
                 awk -F'\t' '
                     BEGIN{printf "%-25s %-20s %s\n","NAME","PORTS","STATUS"}
                     {
@@ -125,7 +131,8 @@ function devilbox --description "Devilbox CLI manager"
                         }
                         printf "%-25s %-20s %s\n",$1,port,$3
                     }'
-        case ''
+            ;;
+        "")
             echo "Usage: devilbox <command>"
             echo ""
             echo "Commands:"
@@ -138,9 +145,11 @@ function devilbox --description "Devilbox CLI manager"
             echo "  kill      Down containers and networks"
             echo "  reboot    Stop and remove container configs"
             echo "  status    Show container status"
-        case '*'
+            ;;
+        *)
             echo "Unknown command: $cmd"
             echo "Run 'devilbox' for usage."
             return 1
-    end
-end
+            ;;
+    esac
+}
